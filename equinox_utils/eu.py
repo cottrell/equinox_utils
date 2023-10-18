@@ -1,4 +1,7 @@
 import contextlib
+import inspect
+from functools import wraps
+from dataclasses import dataclass
 import dataclasses
 import hashlib
 import importlib
@@ -12,6 +15,7 @@ import pickle
 import tempfile
 from base64 import b64decode, b64encode
 from types import FunctionType
+from typing import Dict
 
 import cloudpickle
 import equinox as eqx
@@ -35,7 +39,27 @@ def example_pytreedef_works(model):
     # zdata = leaves.serialize_somehow() # ???
 
 
+# ## experiment with tree registry (didn't work don't understand)
+# def flatten_module(container):
+#     flat_contents = container.__getstate__()
+#     aux_data = (container.__module__, container.__class__.__qualname__)
+#     return flat_contents, aux_data
+# 
+# def unflatted_module(aux_data, flat_contents):
+#     module, qualname = aux_data
+#     class_ = get_object_from_module_and_qualname(module, qualname)
+#     asdf
+#     # params = reconstitute_from_root(module)
+#     # return init_from_state_params(class_, params)
+#     return 
+# 
+# jax.tree_util.register_pytree_node(eqx.Module, flatten_module, unflatted_module)
+# 
+# ##
+
+
 def get_hash_from_params(params):
+    # NOTE: dict of tuples are not supported in json, convert to nested dicts instead.
     text = json.dumps(params, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
@@ -78,6 +102,9 @@ def save_model_state(model, filename, array_flavour='tolist'):
     jsonifiable = params_to_jsonifiable(params)
     param_hash = get_hash_from_params(jsonifiable)
     print(f'saving to {filename}')
+    dirname = os.path.dirname(filename)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     json.dump(jsonifiable, open(filename, 'w'))
 
 
@@ -197,7 +224,8 @@ def recurse_get_state(x):
         # dict_keys(['t0', 't1', 'ts', 'ys', 'interpolation', 'stats', 'result', 'solver_state', 'controller_state',
         # 'made_jump', '__doc__', '__annotations__', '__module__'])
         # comment out and uncomment below two lines to see error in test_diffrax
-        return {'dict': {k: recurse_get_state(v) for k, v in x.items() if not k.startswith('__')}}
+        # return {'dict': {k: recurse_get_state(v) for k, v in x.items() if not k.startswith('__')}}
+        return {'dict': {k: recurse_get_state(v) for k, v in x.items() if not isinstance(k, str) or not k.startswith('__')}}
         # return {'dict': {k: recurse_get_state(v) for k, v in x.items()}}
     elif isinstance(x, list):
         return [recurse_get_state(v) for v in x]
@@ -515,13 +543,48 @@ def get_summary_info(model):
     return pd.DataFrame(d_).T
 
 
+# NOTE: currently not frozen so you can do model.model = train(model.model, ...)
+@dataclass
+class ModelWithMeta:
+    meta: Dict
+    model: eqx.Module
 
-def monkey_patch_equinox():
-    import equinox as eqx
+    def save(self, path):
+        # TODO: handle buf saving via zipfile or something or separate method
+        os.makedirs(path, exist_ok=True)
+        self._save_meta(os.path.join(path, 'meta.json'))
+        self._save_model(os.path.join(path, 'model.eqx'))
 
-    eqx.Module.summary_info = property(get_summary_info)
-    eqx.Module.save_model_state = save_model_state
+    def _save_model(self, path):
+        save_model_state(self.model, path)
+
+    def _save_meta(self, path):
+        json.dump(self.meta, open(path, 'w'))
+
+    @classmethod
+    def load(cls, path):
+        meta = json.load(open(os.path.join(path, 'meta.json')))
+        model = load_model_state(os.path.join(path, 'model.eqx'))
+        return cls(meta=meta, model=model)
+
+    def __eq__(self, other):
+        check_meta = self.meta == other.meta
+        check_model = check_identical(self.model, other.model)
+        return check_meta & check_meta
 
 
-monkey_patch_equinox()
+def model_maker(fun):
+    """This is a decorator that wraps a function that takes some jsonifiable inputs parameters and returns a model.  The
+    wrapped function returns a ModelWithMeta instance."""
+    sig = inspect.signature(fun)
+
+    @wraps(fun)
+    def inner(*args, **kwargs):
+        bound = sig.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
+        model = fun(*args, **kwargs)
+        meta = bound.arguments
+        return ModelWithMeta(model=model, meta=meta)
+
+    return inner
 
