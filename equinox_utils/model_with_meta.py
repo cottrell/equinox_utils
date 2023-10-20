@@ -1,17 +1,39 @@
-NOTE: currently not frozen so you can do model.model = train(model.model, ...)
+from dataclasses import dataclass
+import os
+import json
+import equinox as eqx
+from functools import wraps
+from typing import Dict
+from .util import check_identical
+from .serialization import flavours as _serialization_flavours
+
+_MODEL_FILENAME = 'model.eqx'
+_META_FILENAME = 'meta.json'
+_SERIALIZE_META_FILENAME = 'serialize_meta.json'
+
 @dataclass
 class ModelWithMeta:
+    """A holder for equinox model (model) and meta data dictionary (meta).
+    
+    NOTE: currently not frozen so you are able to do model.model = train(model.model, ...)."""
     meta: Dict
     model: eqx.Module
 
-    def save(self, path):
-        # TODO: handle buf saving via zipfile or something or separate method
+    def __init__(self, default_equinox_serialization_flavour='tree_serialize_leaves'):
+        self.default_equinox_serialization_flavour = default_equinox_serialization_flavour
+
+    def save(self, path, flavour=None):
         os.makedirs(path, exist_ok=True)
         self._save_meta(os.path.join(path, 'meta.json'))
-        self._save_model(os.path.join(path, 'model.eqx'))
+        flavour = self._save_model(os.path.join(path, 'model.eqx'), flavour=flavour)
+        serialize_meta = dict(serialization_flavour=flavour)
+        open(os.path.join(path, 'serialize_meta.json'), 'w').write(json.dumps(serialize_meta))
 
-    def _save_model(self, path):
-        save_model_state(self.model, path)
+    def _save_model(self, path, *, flavour):
+        flavour = flavour or self.default_equinox_serialization_flavour
+        writer = _serialization_flavours[flavour]['write']
+        writer(self.model, path)
+        return flavour
 
     def _save_meta(self, path):
         json.dump(self.meta, open(path, 'w'))
@@ -19,7 +41,9 @@ class ModelWithMeta:
     @classmethod
     def load(cls, path):
         meta = json.load(open(os.path.join(path, 'meta.json')))
-        model = load_model_state(os.path.join(path, 'model.eqx'))
+        flavour = json.load(os.path.join(path, 'serialize_meta.json'))['serialization_flavour']
+        reader = _serialization_flavours[flavour]['reader']
+        model = reader(os.path.join(path, 'model.eqx'))
         return cls(meta=meta, model=model)
 
     def __eq__(self, other):
