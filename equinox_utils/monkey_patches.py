@@ -27,7 +27,7 @@ def monkey_patch_equinox():
     import equinox as eqx
 
     eqx.Module.summary_info = property(get_summary_info)
-    eqx.Module.save_model_state = save_model_state
+    # eqx.Module.save_model_state = save_model_state
 
 
 monkey_patch_equinox()

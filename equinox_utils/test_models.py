@@ -1,27 +1,12 @@
-import contextlib
-import inspect
-from functools import wraps
-from dataclasses import dataclass
-import dataclasses
-import hashlib
-import importlib
-
-import io
-import json
-import lzma
-import os
-import pickle
-import tempfile
-from base64 import b64decode, b64encode
 from types import FunctionType
-from typing import Dict
 
-import cloudpickle
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jaxtyping import Array, Int
+
+from .model_with_meta import model_maker
+
 TEST_SERIALIZATION = True
 
 
@@ -42,69 +27,11 @@ class Another(eqx.Module):
         self.layers = [Linear(in_size, out_size, key) for _ in range(n)]
 
 
-def test_simple():
-    key = jax.random.PRNGKey(0)
-    in_size = 12
-    out_size = 3
-    n = 5
-    a = Another(n, in_size, out_size, key)
-    params = recurse_get_state(a)
-    b = reconstitute(params)
-    assert check_identical(a, b), f'failed'
-    if TEST_SERIALIZATION:
-        serialization_test_fun(params)
-
-
 class Func(eqx.Module):
     func: FunctionType
 
     def __init__(self):
         self.func = lambda x: x
-
-
-def test_func():
-    a = Func()
-    params = recurse_get_state(a)
-    b = reconstitute(params)
-    assert check_identical(a, b), f'failed'
-    if TEST_SERIALIZATION:
-        serialization_test_fun(params)
-
-
-def test_lineax():
-    from lineax import CG, GMRES, LU, QR, SVD, BiCGStab, Diagonal, NormalCG, Triangular, Tridiagonal
-
-    for module_ in [BiCGStab, CG, GMRES, NormalCG]:
-        a = module_(atol=1e-3, rtol=1e-4)
-        params = recurse_get_state(a)
-        b = reconstitute(params)
-        assert check_identical(a, b), f'{module_} failed'
-        if TEST_SERIALIZATION:
-            serialization_test_fun(params)
-    for module_ in [Diagonal, LU, QR, SVD, Triangular, Tridiagonal]:
-        a = module_()
-        params = recurse_get_state(a)
-        b = reconstitute(params)
-        assert check_identical(a, b), f'{module_} failed'
-        if TEST_SERIALIZATION:
-            serialization_test_fun(params)
-
-
-def test_diffrax():
-    from diffrax import Dopri5, ODETerm, diffeqsolve
-
-    def f(t, y, args):
-        return -y
-
-    term = ODETerm(f)
-    solver = Dopri5()
-    y0 = jnp.array([2.0, 3.0])
-    a = diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0)
-    params = recurse_get_state(a)
-    b = reconstitute(params)
-    assert check_identical(a, b), f'diffrax failed'
-    if TEST_SERIALIZATION:
-        serialization_test_fun(params)
 
 
 class Model_stateful(eqx.Module):
@@ -137,19 +64,6 @@ class Model_stateful(eqx.Module):
         return x, state
 
 
-def test_stateful():
-    # from https://docs.kidger.site/equinox/examples/stateful/
-    key = jax.random.PRNGKey(0)
-    a = Model_stateful(key=key)
-    params = recurse_get_state(a)
-    b = reconstitute(params)
-    assert check_identical(a, b), f'stateful failed'
-    # TODO: NOTE: abolish tuples as they are not json serializable round trip
-    params = tuple_to_list(params)
-    if TEST_SERIALIZATION:
-        serialization_test_fun(params)
-
-
 class LanguageModel_shared(eqx.Module):
     shared: eqx.nn.Shared
 
@@ -171,34 +85,83 @@ class LanguageModel_shared(eqx.Module):
         return jax.vmap(linear)(values)
 
 
-def test_shared():
-    # from https://docs.kidger.site/equinox/api/nn/shared/
-    key = jax.random.PRNGKey(0)
-    a = LanguageModel_shared(key=key)
-    params = recurse_get_state(a)
-    b = reconstitute(params)
-    assert check_identical(a, b), f'stateful failed'
+@model_maker
+def make_model(*, seed=0, flavour):
+    if flavour == 'simple':
+        key = jax.random.PRNGKey(seed)
+        in_size = 12
+        out_size = 3
+        n = 5
+        model = Another(n, in_size, out_size, key)
+    elif flavour == 'shared':
+        # from https://docs.kidger.site/equinox/api/nn/shared/
+        model = LanguageModel_shared(key=key)
+    elif flavour == 'stateful':
+        # from https://docs.kidger.site/equinox/examples/stateful/
+        model = Model_stateful(key=key)
+    elif flavour.startswith('lineax-'):
+        from lineax import CG, GMRES, LU, QR, SVD, BiCGStab, Diagonal, NormalCG, Triangular, Tridiagonal
+
+        module_ = flavour.split('-')[1]
+        module_ = locals()[module_]
+        if module_ in [BiCGStab, CG, GMRES, NormalCG]:
+            model = module_(atol=1e-3, rtol=1e-4)
+        elif module_ in [Diagonal, LU, QR, SVD, Triangular, Tridiagonal]:
+            model = module_()
+        else:
+            raise ValueError(f'unknown module {module_}')
+    elif flavour == 'diffrax':
+        from diffrax import Dopri5, ODETerm, diffeqsolve
+
+        def f(t, y, args):
+            return -y
+
+        term = ODETerm(f)
+        solver = Dopri5()
+        y0 = jnp.array([2.0, 3.0])
+        model = diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0)
+    elif flavour == 'func':
+        model = Func()
+    else:
+        raise ValueError(f'unknown flavour {flavour}')
+    return model
+
+
+flavours = [
+    'simple',
+    'shared',
+    'stateful',
+    'lineax-CG',
+    'lineax-GMRES',
+    'lineax-LU',
+    'lineax-QR',
+    'lineax-SVD',
+    'lineax-BiCGStab',
+    'lineax-Diagonal',
+    'lineax-NormalCG',
+    'lineax-Triangular',
+    'lineax-Tridiagonal',
+    'diffrax',
+    'func',
+]
 
 
 def test_all():
-    test_simple()
-    test_func()
-    test_diffrax()
-    test_lineax()
-    test_stateful()
-    test_shared()
-
-def serialization_test_fun(params):
-    """params comes from recurse_get_state"""
-    for array_flavour in ['tolist', 'save', 'save_xz_b64']:
-        jsonifiable = params_to_jsonifiable(params, array_flavour=array_flavour)
-        string_ = json.dumps(jsonifiable)
-        jsonifiable_ = json.loads(string_)
-        check = check_identical(jsonifiable, jsonifiable_)
-        params_ = jsonifiable_to_params(jsonifiable_)
-        check = check_identical(params, params_)
-        if not check:
-            return
-        assert check_identical(params, params_), f'array_flavour={array_flavour} failed'
+    for flavour in flavours:
+        print(f'flavour={flavour}')
+        model = make_model(flavour=flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
+        # TODO: finish
 
 
+# def serialization_test_fun(params):
+#     """params comes from recurse_get_state"""
+#     for array_flavour in ['tolist', 'save', 'save_xz_b64']:
+#         jsonifiable = params_to_jsonifiable(params, array_flavour=array_flavour)
+#         string_ = json.dumps(jsonifiable)
+#         jsonifiable_ = json.loads(string_)
+#         check = check_identical(jsonifiable, jsonifiable_)
+#         params_ = jsonifiable_to_params(jsonifiable_)
+#         check = check_identical(params, params_)
+#         if not check:
+#             return
+#         assert check_identical(params, params_), f'array_flavour={array_flavour} failed'

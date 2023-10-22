@@ -1,27 +1,18 @@
 """NOTE: experimental."""
-import contextlib
 import dataclasses
-import hashlib
 import importlib
-import inspect
 import io
 import json
 import lzma
-import os
 import pickle
-import tempfile
 from base64 import b64decode, b64encode
-from dataclasses import dataclass
-from functools import wraps
 from types import FunctionType
-from typing import Dict
 
 import cloudpickle
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Int
 
 
 def recurse_get_state(x):
@@ -169,7 +160,9 @@ def params_to_jsonifiable(params, array_flavour='tolist', allow_pickle_fallback=
                     fun = serializers_deserializers['cloudpickle']['write']
                     return f'cloudpickle:{fun(x)}'
                 else:
-                    raise Exception(f'failed to json.dumps(x) for x={x}, set allow_pickle_fallback=True if you want to use cloudpickle')
+                    raise Exception(
+                        f'failed to json.dumps(x) for x={x}, set allow_pickle_fallback=True if you want to use cloudpickle'
+                    )
             return x  # f'json:{x}'
 
     return jax.tree_map(inner, params)
