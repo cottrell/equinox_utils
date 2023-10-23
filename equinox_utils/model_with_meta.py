@@ -71,7 +71,7 @@ class ModelWithMeta:
         if flavour == 'tree_serialize_leaves':
             maker_fun = get_object_from_module_and_qualname(module, qualname)
             model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
-            reader(path, model=model.model)
+            model.model = reader(path, model=model.model)
             return model
         elif flavour == 'orbax':
             # WARNING: this is experimental and I do not think will not work in general as no recursion on eqx modules?.
