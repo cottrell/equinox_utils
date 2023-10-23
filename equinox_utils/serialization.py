@@ -23,8 +23,8 @@ def write_equinox_via_tree_serialize_leaves(model, path_or_buf):
 
 
 def read_equinox_via_tree_serialize_leaves(path_or_buf, model, **kwargs):
-    # NOTE: this is in-place on model
-    eqx.tree_deserialise_leaves(path_or_buf, model)
+    # NOTE: this is **not** an in-place as I previously though
+    return eqx.tree_deserialise_leaves(path_or_buf, model)
 
 
 def write_equinox_via_recurse_get_state(model, path_or_buf):
