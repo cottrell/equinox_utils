@@ -1,4 +1,5 @@
 import inspect
+import logging
 import json
 import os
 from dataclasses import dataclass
@@ -7,7 +8,7 @@ from typing import Dict
 
 import equinox as eqx
 
-from .recurse_get_state import get_object_from_module_and_qualname
+from .recurse_get_state import get_object_from_module_and_qualname, recurse_get_state
 from .serialization import flavours as _serialization_flavours
 from .util import check_identical
 
@@ -15,6 +16,7 @@ _MODEL_FILENAME = 'model.eqx'
 _META_FILENAME = 'meta.json'
 _SERIALIZE_META_FILENAME = 'serialize_meta.json'
 
+# logging.getLogger().setLevel(logging.DEBUG)
 
 @dataclass
 class ModelWithMeta:
@@ -85,9 +87,25 @@ class ModelWithMeta:
             return cls(meta=meta, model=model, module=module, qualname=qualname)
 
     def __eq__(self, other):
-        check_meta = self.meta == other.meta
-        check_model = check_identical(self.model, other.model)
-        return check_meta & check_meta
+        if set(self.__dataclass_fields__) != set(other.__dataclass_fields__):
+            intersection = set(self.__dataclass_fields__) & set(other.__dataclass_fields__)
+            missing_left = set(self.__dataclass_fields__) - set(other.__dataclass_fields__)
+            missing_right = set(other.__dataclass_fields__) - set(self.__dataclass_fields__)
+            logging.debug(f'fields do not match. missing_left: {missing_left}, missing_right: {missing_right}, intersection: {intersection}')
+            return False
+        for k in self.__dataclass_fields__:
+            if k == 'model':
+                continue
+            if not getattr(self, k) == getattr(other, k):
+                logging.debug(f'fields do not match: {k} {getattr(self, k)} != {getattr(other, k)}')
+                return False
+        # TODO: I would like this one but it does not work due to ... classses (not class instances and not being equal
+        # for some reason ... something to do with dynamic import vs static?)
+        # check_model = check_identical(self.model, other.model)
+        check_model = check_identical(recurse_get_state(self.model), recurse_get_state(other.model))
+        if not check_model:
+            logging.debug(f'models do not match: {self.model} != {other.model}')
+        return check_model
 
 
 def model_maker(fun):

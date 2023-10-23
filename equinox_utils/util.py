@@ -20,16 +20,33 @@ def tuple_to_list(tree):
         return tree
 
 
+# def check_identical(tree1, tree2):
+#     def compare_elements(x, y):
+#         if isinstance(x, FunctionType):
+#             return x.__code__.co_code == y.__code__.co_code
+#         else:
+#             return jnp.all(x == y)
+# 
+#     comparison_tree = jax.tree_map(compare_elements, tree1, tree2)
+# 
+#     all_identical = all(jax.tree_util.tree_flatten(comparison_tree)[0])
+#     return all_identical
+
+
 def check_identical(tree1, tree2):
+    leaves1, treedef1 = jax.tree_util.tree_flatten(tree1)
+    leaves2, treedef2 = jax.tree_util.tree_flatten(tree2)
+
+    if treedef1 != treedef2:
+        return False
+
     def compare_elements(x, y):
         if isinstance(x, FunctionType):
             return x.__code__.co_code == y.__code__.co_code
         else:
             return jnp.all(x == y)
 
-    comparison_tree = jax.tree_map(compare_elements, tree1, tree2)
-
-    all_identical = all(jax.tree_util.tree_flatten(comparison_tree)[0])
+    all_identical = all(map(compare_elements, leaves1, leaves2))
     return all_identical
 
 
