@@ -1,3 +1,4 @@
+import pytest
 from types import FunctionType
 import tempfile
 
@@ -7,6 +8,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Int
 
 from .model_with_meta import model_maker, ModelWithMeta
+from .recurse_get_state import _array_flavours
 
 
 class Linear(eqx.Module):
@@ -86,8 +88,8 @@ class LanguageModel_shared(eqx.Module):
 
 @model_maker
 def make_model(*, seed=0, flavour, **kwargs):
+    key = jax.random.PRNGKey(seed)
     if flavour == 'simple':
-        key = jax.random.PRNGKey(seed)
         in_size = 12
         out_size = 3
         n = 5
@@ -144,38 +146,40 @@ flavours = [
     'func',
 ]
 
-
-def test_all():
-    for model_flavour in flavours:
-        model = make_model(flavour=model_flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
-
-        serialization_flavour = 'tree_serialize_leaves'
-        filename = tempfile.mktemp(prefix='equinox_util_test_')
-        print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} saving to {filename}')
-        model.save(filename, flavour=serialization_flavour)
-        model_ = ModelWithMeta.load(filename)
-        assert model_ == model, f'flavour={model_flavour} failed eq check'
-
-        serialization_flavour = 'recurse_get_state'
-        from .recurse_get_state import _array_flavours
-        for array_flavour in _array_flavours:
-            filename = tempfile.mktemp(prefix='equinox_util_test_')
-            print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} array_flavour={array_flavour} saving to {filename}')
-            model.save(filename, flavour=serialization_flavour, array_flavour=array_flavour)
-            model_ = ModelWithMeta.load(filename)
-            assert model_ == model, f'flavour={model_flavour} array_flavour={array_flavour} failed eq check'
+def _helper(*, model_flavour, serialization_flavour, **kwargs):
+    model = make_model(flavour=model_flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
+    filename = tempfile.mktemp(prefix='equinox_util_test_')
+    print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} {kwargs}, saving to {filename}')
+    model.save(filename, flavour=serialization_flavour, **kwargs)
+    model_ = ModelWithMeta.load(filename)
+    assert model_ == model, f'flavour={model_flavour} {kwargs} failed eq check'
 
 
+@pytest.mark.parametrize("model_flavour", flavours)
+def test_serialization_tree_serialize_leaves(model_flavour):
+    serialization_flavour = 'tree_serialize_leaves'
+    _helper(model_flavour=model_flavour, serialization_flavour=serialization_flavour)
 
-# def serialization_test_fun(params):
-#     """params comes from recurse_get_state"""
-#     for array_flavour in ['tolist', 'save', 'save_xz_b64']:
-#         jsonifiable = params_to_jsonifiable(params, array_flavour=array_flavour)
-#         string_ = json.dumps(jsonifiable)
-#         jsonifiable_ = json.loads(string_)
-#         check = check_identical(jsonifiable, jsonifiable_)
-#         params_ = jsonifiable_to_params(jsonifiable_)
-#         check = check_identical(params, params_)
-#         if not check:
-#             return
-#         assert check_identical(params, params_), f'array_flavour={array_flavour} failed'
+
+@pytest.mark.parametrize("model_flavour", flavours)
+@pytest.mark.parametrize("array_flavour", _array_flavours)
+def test_serialization_recurse_get_state(model_flavour, array_flavour):
+    _helper(model_flavour=model_flavour, serialization_flavour='recurse_get_state', array_flavour=array_flavour)
+
+# def test_all():
+#     for model_flavour in flavours:
+#         model = make_model(flavour=model_flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
+# 
+#         filename = tempfile.mktemp(prefix='equinox_util_test_')
+#         print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} saving to {filename}')
+#         model.save(filename, flavour=serialization_flavour)
+#         model_ = ModelWithMeta.load(filename)
+#         assert model_ == model, f'flavour={model_flavour} failed eq check'
+# 
+#         serialization_flavour = 'recurse_get_state'
+#         for array_flavour in _array_flavours:
+#             filename = tempfile.mktemp(prefix='equinox_util_test_')
+#             print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} array_flavour={array_flavour} saving to {filename}')
+#             model.save(filename, flavour=serialization_flavour, array_flavour=array_flavour)
+#             model_ = ModelWithMeta.load(filename)
+#             assert model_ == model, f'flavour={model_flavour} array_flavour={array_flavour} failed eq check'

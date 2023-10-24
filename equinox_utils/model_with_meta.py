@@ -120,6 +120,9 @@ def model_maker(fun):
     def inner(*args, **kwargs):
         bound = sig.bind_partial(*args, **kwargs)
         bound.apply_defaults()
+        # NOTE: if we do not manually pop kwargs we end up with 'kwargs' in the meta instead of the items
+        if 'kwargs' in bound.arguments:
+            bound.arguments.update(bound.arguments.pop('kwargs'))
         model = fun(*args, **kwargs)
         meta = bound.arguments
         return ModelWithMeta(model=model, meta=meta, qualname=qualname, module=module_)
