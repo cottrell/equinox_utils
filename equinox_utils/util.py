@@ -26,9 +26,9 @@ def tuple_to_list(tree):
 #             return x.__code__.co_code == y.__code__.co_code
 #         else:
 #             return jnp.all(x == y)
-# 
+#
 #     comparison_tree = jax.tree_map(compare_elements, tree1, tree2)
-# 
+#
 #     all_identical = all(jax.tree_util.tree_flatten(comparison_tree)[0])
 #     return all_identical
 

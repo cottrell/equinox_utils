@@ -1,6 +1,6 @@
 import inspect
-import logging
 import json
+import logging
 import os
 from dataclasses import dataclass
 from functools import wraps
@@ -17,6 +17,7 @@ _META_FILENAME = 'meta.json'
 _SERIALIZE_META_FILENAME = 'serialize_meta.json'
 
 logging.getLogger().setLevel(logging.DEBUG)
+
 
 @dataclass
 class ModelWithMeta:
@@ -92,7 +93,9 @@ class ModelWithMeta:
             intersection = set(self.__dataclass_fields__) & set(other.__dataclass_fields__)
             missing_left = set(self.__dataclass_fields__) - set(other.__dataclass_fields__)
             missing_right = set(other.__dataclass_fields__) - set(self.__dataclass_fields__)
-            logging.debug(f'fields do not match. missing_left: {missing_left}, missing_right: {missing_right}, intersection: {intersection}')
+            logging.debug(
+                f'fields do not match. missing_left: {missing_left}, missing_right: {missing_right}, intersection: {intersection}'
+            )
             return False
         for k in self.__dataclass_fields__:
             if k == 'model':

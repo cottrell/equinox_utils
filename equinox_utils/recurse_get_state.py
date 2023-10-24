@@ -36,7 +36,9 @@ def recurse_get_state(x):
 
 
 def recurse_diff(x, y):
-    assert (type(x) == type(y)) or {type(x), type(y)}.issubset({tuple, list}), f'expected same type got {type(x)} and {type(y)}'
+    assert (type(x) == type(y)) or {type(x), type(y)}.issubset(
+        {tuple, list}
+    ), f'expected same type got {type(x)} and {type(y)}'
     if isinstance(x, eqx.Module):
         x = recurse_get_state(x)
         y = recurse_get_state(y)
@@ -69,7 +71,6 @@ def init_from_state_params(class_, params):
         else:
             obj = class_(**params)  # NOTE: I do not think ever hitting this case right now
         return obj
-
 
 
 def get_object_from_module_and_qualname(module_name, qualname):
@@ -171,6 +172,7 @@ def params_to_jsonifiable(params, array_flavour='tolist', allow_pickle_fallback=
     """
 
     assert array_flavour in _array_flavours
+
     def inner(x):
         if isinstance(x, jax.Array):
             key = {'tolist': 'jnp_tolist', 'save': 'jnp_save', 'save_xz_b64': 'jnp_save_xz_b64'}[array_flavour]

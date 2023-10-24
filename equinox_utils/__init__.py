@@ -1,3 +1,3 @@
-from .model_with_meta import model_maker, ModelWithMeta
+from .model_with_meta import ModelWithMeta, model_maker
 
 load_model = ModelWithMeta.load
