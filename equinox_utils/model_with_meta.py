@@ -16,7 +16,7 @@ _MODEL_FILENAME = 'model.eqx'
 _META_FILENAME = 'meta.json'
 _SERIALIZE_META_FILENAME = 'serialize_meta.json'
 
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 @dataclass
 class ModelWithMeta:
@@ -104,6 +104,9 @@ class ModelWithMeta:
         # for some reason ... something to do with dynamic import vs static?)
         # check_model = check_identical(self.model, other.model)
         check_model = check_identical(recurse_get_state(self.model), recurse_get_state(other.model))
+        # NOTE: why not use model.model.__eq__ ??? ... see test 'shared' there are problematic cases of functions etc.
+        # arguably equinox __eq__ could be fixed but probably it should be strict there.
+        # check_model = self.model == other.model
         if not check_model:
             logging.debug(f'models do not match: {self.model} != {other.model}')
         return check_model

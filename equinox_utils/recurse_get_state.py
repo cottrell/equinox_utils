@@ -2,7 +2,6 @@
 import dataclasses
 import importlib
 import io
-import json
 import lzma
 import pickle
 from base64 import b64decode, b64encode
@@ -14,10 +13,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from . import json_util as json
+
 
 def recurse_get_state(x):
     """custom recursion for eqx.Module detection"""
     if isinstance(x, eqx.Module):
+        return {'module': {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(x.__getstate__())}}}
+    elif isinstance(x, eqx.nn._shared.SharedNode):
+        # NOTE: this is just None state I think
         return {'module': {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(x.__getstate__())}}}
     elif isinstance(x, dict):
         return {
@@ -31,16 +35,41 @@ def recurse_get_state(x):
         return x
 
 
-def init_from_state_params(class_, params):
-    module = object.__new__(class_)
-    fieldnames = {f.name for f in dataclasses.fields(class_)}
-    if params is None:
-        assert len(fieldnames) == 0
+def recurse_diff(x, y):
+    assert (type(x) == type(y)) or {type(x), type(y)}.issubset({tuple, list}), f'expected same type got {type(x)} and {type(y)}'
+    if isinstance(x, eqx.Module):
+        x = recurse_get_state(x)
+        y = recurse_get_state(y)
+    if isinstance(x, dict):
+        assert set(x.keys()) == set(y.keys())
+        return {k: recurse_diff(x[k], y[k]) for k in x.keys()}
+    elif isinstance(x, list):
+        return [recurse_diff(x_, y_) for x_, y_ in zip(x, y)]
+    elif isinstance(x, tuple):
+        return tuple(recurse_diff(x_, y_) for x_, y_ in zip(x, y))
     else:
-        assert set(params.keys()) == fieldnames
-        for key, value in params.items():
-            object.__setattr__(module, key, value)
-    return module
+        return x == y
+
+
+def init_from_state_params(class_, params):
+    if dataclasses.is_dataclass(class_):
+        module = object.__new__(class_)
+        fieldnames = {f.name for f in dataclasses.fields(class_)}
+        if params is None:
+            assert len(fieldnames) == 0
+        else:
+            assert set(params.keys()) == fieldnames
+            for key, value in params.items():
+                object.__setattr__(module, key, value)
+        return module
+    else:
+        if params is None:
+            # NOTE: this is only for ShareNode case I think. It is *not* a dataclass or a eqx.Module
+            obj = class_()
+        else:
+            obj = class_(**params)  # NOTE: I do not think ever hitting this case right now
+        return obj
+
 
 
 def get_object_from_module_and_qualname(module_name, qualname):

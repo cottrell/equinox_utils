@@ -41,10 +41,14 @@ def check_identical(tree1, tree2):
         return False
 
     def compare_elements(x, y):
+        check = False
         if isinstance(x, FunctionType):
-            return x.__code__.co_code == y.__code__.co_code
+            check = x.__code__.co_code == y.__code__.co_code
         else:
-            return jnp.all(x == y)
+            check = jnp.all(x == y)
+        # if not check:
+        #     breakpoint()
+        return check
 
     all_identical = all(map(compare_elements, leaves1, leaves2))
     return all_identical
