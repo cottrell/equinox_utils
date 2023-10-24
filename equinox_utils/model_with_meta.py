@@ -39,10 +39,10 @@ class ModelWithMeta:
         self.qualname = qualname
         self.default_equinox_serialization_flavour = default_equinox_serialization_flavour
 
-    def save(self, path, flavour=None):
+    def save(self, path, flavour=None, **kwargs):
         os.makedirs(path, exist_ok=True)
         self._save_meta(os.path.join(path, 'meta.json'))
-        flavour = self._save_model(os.path.join(path, 'model.eqx'), flavour=flavour)
+        flavour = self._save_model(os.path.join(path, 'model.eqx'), flavour=flavour, **kwargs)
         serialize_meta = dict(
             serialization_flavour=flavour,
             module=self.module,
@@ -50,10 +50,11 @@ class ModelWithMeta:
         )
         open(os.path.join(path, 'serialize_meta.json'), 'w').write(json.dumps(serialize_meta))
 
-    def _save_model(self, path, *, flavour):
+    def _save_model(self, path, *, flavour, **kwargs):
         flavour = flavour or self.default_equinox_serialization_flavour
+        assert flavour in _serialization_flavours, f'unknown flavour {flavour}'
         writer = _serialization_flavours[flavour]['write']
-        writer(self.model, path)
+        writer(self.model, path, **kwargs)
         return flavour
 
     def _save_meta(self, path):

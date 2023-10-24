@@ -131,14 +131,17 @@ serializers_deserializers = {
     },
 }
 
+_array_flavours = ['tolist', 'save', 'save_xz_b64']
+
 
 def params_to_jsonifiable(params, array_flavour='tolist', allow_pickle_fallback=False):
-    """
+    f"""
     Dict of params to something that shoudl be jsonifiable. Arrays handled according to array_flavour.
 
-    - array_flavour: one of 'tolist', 'save', 'save_xz_b64'
+    - array_flavour: one of {_array_flavours}
     """
 
+    assert array_flavour in _array_flavours
     def inner(x):
         if isinstance(x, jax.Array):
             key = {'tolist': 'jnp_tolist', 'save': 'jnp_save', 'save_xz_b64': 'jnp_save_xz_b64'}[array_flavour]

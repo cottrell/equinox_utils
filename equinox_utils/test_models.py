@@ -1,13 +1,12 @@
 from types import FunctionType
+import tempfile
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Int
 
-from .model_with_meta import model_maker
-
-TEST_SERIALIZATION = True
+from .model_with_meta import model_maker, ModelWithMeta
 
 
 class Linear(eqx.Module):
@@ -86,7 +85,7 @@ class LanguageModel_shared(eqx.Module):
 
 
 @model_maker
-def make_model(*, seed=0, flavour):
+def make_model(*, seed=0, flavour, **kwargs):
     if flavour == 'simple':
         key = jax.random.PRNGKey(seed)
         in_size = 12
@@ -147,10 +146,25 @@ flavours = [
 
 
 def test_all():
-    for flavour in flavours:
-        print(f'flavour={flavour}')
-        model = make_model(flavour=flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
-        # TODO: finish
+    for model_flavour in flavours:
+        model = make_model(flavour=model_flavour, seed=2, something_else=dict(a=1, b=2, c=['here', 'is', 'more']))
+
+        serialization_flavour = 'tree_serialize_leaves'
+        filename = tempfile.mktemp(prefix='equinox_util_test_')
+        print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} saving to {filename}')
+        model.save(filename, flavour=serialization_flavour)
+        model_ = ModelWithMeta.load(filename)
+        assert model_ == model, f'flavour={model_flavour} failed eq check'
+
+        serialization_flavour = 'recurse_get_state'
+        from .recurse_get_state import _array_flavours
+        for array_flavour in _array_flavours:
+            filename = tempfile.mktemp(prefix='equinox_util_test_')
+            print(f'flavour={model_flavour} serialization_flavour={serialization_flavour} array_flavour={array_flavour} saving to {filename}')
+            model.save(filename, flavour=serialization_flavour, array_flavour=array_flavour)
+            model_ = ModelWithMeta.load(filename)
+            assert model_ == model, f'flavour={model_flavour} array_flavour={array_flavour} failed eq check'
+
 
 
 # def serialization_test_fun(params):

@@ -27,11 +27,11 @@ def read_equinox_via_tree_serialize_leaves(path_or_buf, model, **kwargs):
     return eqx.tree_deserialise_leaves(path_or_buf, model)
 
 
-def write_equinox_via_recurse_get_state(model, path_or_buf):
+def write_equinox_via_recurse_get_state(model, path_or_buf, **kwargs):
     from .recurse_get_state import save_model_state
 
     with _path_or_buf(path_or_buf, mode='w') as buf:
-        save_model_state(model, buf)
+        save_model_state(model, buf, **kwargs)
 
 
 def read_equinox_via_recurse_get_state(path_or_buf, **kwargs):
