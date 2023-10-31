@@ -1,4 +1,5 @@
 import inspect
+import io
 import json
 import logging
 import os
@@ -40,7 +41,27 @@ class ModelWithMeta:
         self.qualname = qualname
         self.default_equinox_serialization_flavour = default_equinox_serialization_flavour
 
+    def serialize_to_dict(self, flavour=None, **kwargs):
+        """For in-memory serialization. Returns a dictionary of bytes corresponding to the files that would be written.
+
+        Only intended to work for tree_serialize_leaves and recurse_get_state flavours."""
+        out = dict()
+        out['meta.json'] = json.dumps(self.meta).encode()
+        buf = io.BytesIO()
+        flavour = self._save_model(buf, flavour=flavour, **kwargs)
+        buf.seek(0)
+        out['model.eqx'] = buf.read()
+        out['serialize_meta.json'] = json.dumps(
+            dict(
+                serialization_flavour=flavour,
+                module=self.module,
+                qualname=self.qualname,
+            )
+        ).encode()
+        return out
+
     def save(self, path, flavour=None, **kwargs):
+        # TODO: consider using serialize to dict as intermediary to avoid logic twice
         os.makedirs(path, exist_ok=True)
         self._save_meta(os.path.join(path, 'meta.json'))
         flavour = self._save_model(os.path.join(path, 'model.eqx'), flavour=flavour, **kwargs)
@@ -63,9 +84,10 @@ class ModelWithMeta:
 
     @classmethod
     def load(cls, path):
+        # TODO: consider using deserialize from dict as intermediary to avoid logic twice
         meta = json.load(open(os.path.join(path, 'meta.json')))
         serialize_meta = json.load(open(os.path.join(path, 'serialize_meta.json')))
-        flavour = json.load(open(os.path.join(path, 'serialize_meta.json')))['serialization_flavour']
+        flavour = serialize_meta['serialization_flavour']
         reader = _serialization_flavours[flavour]['read']
         path = os.path.join(path, 'model.eqx')
         module = serialize_meta['module']
@@ -87,6 +109,36 @@ class ModelWithMeta:
         else:
             model = reader(path)  # NOTE: this is just an equinox model not mwm
             return cls(meta=meta, model=model, module=module, qualname=qualname)
+
+    @classmethod
+    def deserialize_from_dict(cls, d_in):
+        meta = json.loads(d_in['meta.json'])
+        serialize_meta = json.loads(d_in['serialize_meta.json'])
+        flavour = serialize_meta['serialization_flavour']
+        reader = _serialization_flavours[flavour]['read']
+        module = serialize_meta['module']
+        qualname = serialize_meta['qualname']
+        buf = io.BytesIO(d_in['model.eqx'])
+        if flavour == 'tree_serialize_leaves':
+            maker_fun = get_object_from_module_and_qualname(module, qualname)
+            model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
+            model.model = reader(buf, model=model.model)
+            return model
+        elif flavour == 'orbax':
+            raise Exception('not implemented')
+            # # WARNING: this is experimental and I do not think will not work in general as no recursion on eqx modules?.
+            # # NOTE: strictly, we only need the equinox class name, not the make function which creates an instance
+            # # TODO: consider persisting the equinox class name instead of the make function
+            # maker_fun = get_object_from_module_and_qualname(module, qualname)
+            # model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
+            # pytree = reader(path)
+            # model.model = model.model.__class__(**pytree)
+            # return model
+        elif flavour == 'recurse_get_state':
+            model = reader(buf)  # NOTE: this is just an equinox model not mwm
+            return cls(meta=meta, model=model, module=module, qualname=qualname)
+        else:
+            raise Exception(f'unknown flavour {flavour}')
 
     def __eq__(self, other):
         if set(self.__dataclass_fields__) != set(other.__dataclass_fields__):
