@@ -106,9 +106,11 @@ class ModelWithMeta:
             pytree = reader(path)
             model.model = model.model.__class__(**pytree)
             return model
-        else:
+        elif flavour == 'recurse_get_state':
             model = reader(path)  # NOTE: this is just an equinox model not mwm
             return cls(meta=meta, model=model, module=module, qualname=qualname)
+        else:
+            raise Exception(f'unknown flavour {flavour}')
 
     @classmethod
     def deserialize_from_dict(cls, d_in):
