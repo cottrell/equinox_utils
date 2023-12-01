@@ -46,12 +46,12 @@ class ModelWithMeta:
 
         Only intended to work for tree_serialize_leaves and recurse_get_state flavours."""
         out = dict()
-        out['meta.json'] = json.dumps(self.meta).encode()
+        out[_META_FILENAME] = json.dumps(self.meta).encode()
         buf = io.BytesIO()
         flavour = self._save_model(buf, flavour=flavour, **kwargs)
         buf.seek(0)
-        out['model.eqx'] = buf.read()
-        out['serialize_meta.json'] = json.dumps(
+        out[_MODEL_FILENAME] = buf.read()
+        out[_SERIALIZE_META_FILENAME] = json.dumps(
             dict(
                 serialization_flavour=flavour,
                 module=self.module,
@@ -63,14 +63,14 @@ class ModelWithMeta:
     def save(self, path, flavour=None, **kwargs):
         # TODO: consider using serialize to dict as intermediary to avoid logic twice
         os.makedirs(path, exist_ok=True)
-        self._save_meta(os.path.join(path, 'meta.json'))
-        flavour = self._save_model(os.path.join(path, 'model.eqx'), flavour=flavour, **kwargs)
+        self._save_meta(os.path.join(path, _META_FILENAME))
+        flavour = self._save_model(os.path.join(path, _MODEL_FILENAME), flavour=flavour, **kwargs)
         serialize_meta = dict(
             serialization_flavour=flavour,
             module=self.module,
             qualname=self.qualname,
         )
-        open(os.path.join(path, 'serialize_meta.json'), 'w').write(json.dumps(serialize_meta))
+        open(os.path.join(path, _SERIALIZE_META_FILENAME), 'w').write(json.dumps(serialize_meta))
 
     def _save_model(self, path, *, flavour, **kwargs):
         flavour = flavour or self.default_equinox_serialization_flavour
@@ -85,11 +85,11 @@ class ModelWithMeta:
     @classmethod
     def load(cls, path):
         # TODO: consider using deserialize from dict as intermediary to avoid logic twice
-        meta = json.load(open(os.path.join(path, 'meta.json')))
-        serialize_meta = json.load(open(os.path.join(path, 'serialize_meta.json')))
+        meta = json.load(open(os.path.join(path, _META_FILENAME)))
+        serialize_meta = json.load(open(os.path.join(path, _SERIALIZE_META_FILENAME)))
         flavour = serialize_meta['serialization_flavour']
         reader = _serialization_flavours[flavour]['read']
-        path = os.path.join(path, 'model.eqx')
+        path = os.path.join(path, _MODEL_FILENAME)
         module = serialize_meta['module']
         qualname = serialize_meta['qualname']
         if flavour == 'tree_serialize_leaves':
@@ -114,13 +114,13 @@ class ModelWithMeta:
 
     @classmethod
     def deserialize_from_dict(cls, d_in):
-        meta = json.loads(d_in['meta.json'])
-        serialize_meta = json.loads(d_in['serialize_meta.json'])
+        meta = json.loads(d_in[_META_FILENAME])
+        serialize_meta = json.loads(d_in[_SERIALIZE_META_FILENAME])
         flavour = serialize_meta['serialization_flavour']
         reader = _serialization_flavours[flavour]['read']
         module = serialize_meta['module']
         qualname = serialize_meta['qualname']
-        buf = io.BytesIO(d_in['model.eqx'])
+        buf = io.BytesIO(d_in[_MODEL_FILENAME])
         if flavour == 'tree_serialize_leaves':
             maker_fun = get_object_from_module_and_qualname(module, qualname)
             model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
