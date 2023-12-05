@@ -7,7 +7,6 @@ import pickle
 from base64 import b64decode, b64encode
 from types import FunctionType
 
-import cloudpickle
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -137,6 +136,16 @@ def maybe_json_loads(x):
     return x
 
 
+def cloudpickle_write(x):
+    import cloudpickle
+    return b64decode(cloudpickle.dumps(x)).decode()
+
+
+def cloudpickile_read(x):
+    import cloudpickle
+    return cloudpickle.loads(b64decode(x))
+
+
 serializers_deserializers = {
     'np_save': {'write': lambda x: b64encode(np_save(x)).decode(), 'read': lambda x: np.load(io.BytesIO(b64decode(x)))},
     'jnp_save': {
@@ -156,8 +165,8 @@ serializers_deserializers = {
     'jnp_tolist': {'write': lambda x: x.tolist(), 'read': lambda x: jnp.array(maybe_json_loads(x))},
     'pickle': {'write': lambda x: b64encode(pickle.dumps(x)).decode(), 'read': lambda x: pickle.loads(b64decode(x))},
     'cloudpickle': {
-        'write': lambda x: b64encode(cloudpickle.dumps(x)).decode(),
-        'read': lambda x: cloudpickle.loads(b64decode(x)),
+        'write': cloudpickle_write,
+        'read': cloudpickile_read,
     },
 }
 
