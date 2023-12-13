@@ -1,4 +1,4 @@
-from .summary_info import get_info, get_summary_info
+from .repr import get_info, get_summary_info
 
 
 def monkey_patch_equinox():
