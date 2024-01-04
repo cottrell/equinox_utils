@@ -14,15 +14,32 @@ import numpy as np
 
 from . import json_util as json
 
+EQX_MODULE = 'eqx.Module'
+OPTAX_MODULE = 'optax.Module'
+
+
+def getstate_no_dunder_and_none_for_nothing(x):
+    if x.__getstate__() is None:
+        return
+    res = {k: v for k, v in x.__getstate__().items() if not isinstance(k, str) or not k.startswith('__')}
+    res = None if not res else res
+    return res
 
 def recurse_get_state(x):
     """custom recursion for eqx.Module detection"""
     if isinstance(x, eqx.Module):
-        return {'module': {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(x.__getstate__())}}}
+        print(f'found eqx.Module {x.__class__}')
+        return {EQX_MODULE: {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(getstate_no_dunder_and_none_for_nothing(x))}}}
     elif isinstance(x, eqx.nn._shared.SharedNode):
         # NOTE: this is just None state I think
-        return {'module': {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(x.__getstate__())}}}
+        print(f'found eqx.nn._shared.SharedNode {x.__class__}')
+        return {EQX_MODULE: {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(getstate_no_dunder_and_none_for_nothing(x))}}}
+    elif x.__class__.__module__.startswith('optax.'):
+        # TODO: could not find how to detect optax by kind of class
+        print(f'found optax.Module {x.__class__}')
+        return {OPTAX_MODULE: {x.__class__.__module__: {x.__class__.__qualname__: recurse_get_state(x._asdict())}}}
     elif isinstance(x, dict):
+        print(f'found dict {x}')
         return {
             'dict': {k: recurse_get_state(v) for k, v in x.items() if not isinstance(k, str) or not k.startswith('__')}
         }
@@ -35,7 +52,7 @@ def recurse_get_state(x):
 
 
 def recurse_diff(x, y):
-    assert (type(x) == type(y)) or {type(x), type(y)}.issubset(
+    assert (str(type(x)) == str(type(y))) or {type(x), type(y)}.issubset(
         {tuple, list}
     ), f'expected same type got {type(x)} and {type(y)}'
     if isinstance(x, eqx.Module):
@@ -56,7 +73,7 @@ def init_from_state_params(class_, params):
     if dataclasses.is_dataclass(class_):
         module = object.__new__(class_)
         fieldnames = {f.name for f in dataclasses.fields(class_)}
-        if params is None:
+        if not params:
             assert len(fieldnames) == 0
         else:
             assert set(params.keys()) == fieldnames
@@ -81,11 +98,10 @@ def get_object_from_module_and_qualname(module_name, qualname):
 
 
 def reconstitute_from_root(params):
-    out = None
     if isinstance(params, dict):
         assert len(params) == 1
         k, v = list(params.items())[0]
-        if k == 'module':
+        if k in {EQX_MODULE, OPTAX_MODULE}:
             assert len(v) == 1
             module, v = list(v.items())[0]
             assert len(v) == 1
