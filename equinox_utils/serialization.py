@@ -16,13 +16,13 @@ def _path_or_buf(path_or_buf, mode='wb'):
         raise ValueError("Invalid type for path_or_buf")
 
 
-def write_equinox_via_tree_serialize_leaves(model, path_or_buf):
+def write_equinox_via_tree_serialise_leaves(model, path_or_buf):
     assert isinstance(model, eqx.Module), f'expected model to be an equinox Module, got {type(model)}'
     with _path_or_buf(path_or_buf) as buf:
         eqx.tree_serialise_leaves(buf, model)
 
 
-def read_equinox_via_tree_serialize_leaves(path_or_buf, model, **kwargs):
+def read_equinox_via_tree_serialise_leaves(path_or_buf, model, **kwargs):
     # NOTE: this is **not** an in-place as I previously though
     return eqx.tree_deserialise_leaves(path_or_buf, model)
 
@@ -64,8 +64,8 @@ def read_equinox_via_orbax(path, **kwargs):
 flavours = {
     'recurse_get_state': {'write': write_equinox_via_recurse_get_state, 'read': read_equinox_via_recurse_get_state},
     'orbax': {'write': write_equinox_via_orbax, 'read': read_equinox_via_orbax},
-    'tree_serialize_leaves': {
-        'write': write_equinox_via_tree_serialize_leaves,
-        'read': read_equinox_via_tree_serialize_leaves,
+    'tree_serialise_leaves': {
+        'write': write_equinox_via_tree_serialise_leaves,
+        'read': read_equinox_via_tree_serialise_leaves,
     },
 }

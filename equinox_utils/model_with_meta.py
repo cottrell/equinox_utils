@@ -34,7 +34,7 @@ class ModelWithMeta:
     meta: Dict
     model: eqx.Module
 
-    def __init__(self, default_equinox_serialization_flavour='tree_serialize_leaves', *, meta, model, module, qualname):
+    def __init__(self, default_equinox_serialization_flavour='tree_serialise_leaves', *, meta, model, module, qualname):
         self.meta = meta
         self.model = model
         self.module = module
@@ -44,7 +44,7 @@ class ModelWithMeta:
     def serialize_to_dict(self, flavour=None, **kwargs):
         """For in-memory serialization. Returns a dictionary of bytes corresponding to the files that would be written.
 
-        Only intended to work for tree_serialize_leaves and recurse_get_state flavours."""
+        Only intended to work for tree_serialise_leaves and recurse_get_state flavours."""
         out = dict()
         out[_META_FILENAME] = json.dumps(self.meta).encode()
         buf = io.BytesIO()
@@ -92,7 +92,7 @@ class ModelWithMeta:
         path = os.path.join(path, _MODEL_FILENAME)
         module = serialize_meta['module']
         qualname = serialize_meta['qualname']
-        if flavour == 'tree_serialize_leaves':
+        if flavour == 'tree_serialise_leaves':
             maker_fun = get_object_from_module_and_qualname(module, qualname)
             model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
             model.model = reader(path, model=model.model)
@@ -121,7 +121,7 @@ class ModelWithMeta:
         module = serialize_meta['module']
         qualname = serialize_meta['qualname']
         buf = io.BytesIO(d_in[_MODEL_FILENAME])
-        if flavour == 'tree_serialize_leaves':
+        if flavour == 'tree_serialise_leaves':
             maker_fun = get_object_from_module_and_qualname(module, qualname)
             model = maker_fun(**meta)  # NOTE: remember this returns a model with meta
             model.model = reader(buf, model=model.model)

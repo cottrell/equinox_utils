@@ -169,8 +169,8 @@ flavours_with_marks = [marks.get(x, x) for x in flavours]
 
 
 @pytest.mark.parametrize("model_flavour", flavours_with_marks)
-def test_serialization_tree_serialize_leaves(model_flavour):
-    serialization_flavour = 'tree_serialize_leaves'
+def test_serialization_tree_serialise_leaves(model_flavour):
+    serialization_flavour = 'tree_serialise_leaves'
     _helper(model_flavour=model_flavour, serialization_flavour=serialization_flavour)
 
 
