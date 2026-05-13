@@ -20,3 +20,9 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/cottrell/equinox_utils"
 "Bug Tracker" = "https://github.com/cottrell/equinox_utils/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

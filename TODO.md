@@ -71,7 +71,7 @@ Where `serialize_meta.json` includes at least:
 
 ## Current Orbax wrapper status
 
-`equinox_utils/serialization.py` currently has:
+`src/equinox_utils/serialization.py` currently has:
 
 ```python
 def write_equinox_via_orbax(model, path):
