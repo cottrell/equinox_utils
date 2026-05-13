@@ -255,7 +255,8 @@ def save_model_state(model, buf, array_flavour='tolist', allow_pickle_fallback=F
 
 
 def load_model_state(filename):
-    jsonifiable = json.load(open(filename))
+    with open(filename) as f:
+        jsonifiable = json.load(f)
     params = jsonifiable_to_params(jsonifiable)
     model = reconstitute(params)
     return model

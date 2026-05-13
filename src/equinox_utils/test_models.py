@@ -46,13 +46,13 @@ class Model_stateful(eqx.Module):
 
     def __init__(self, key):
         key1, key2, key3, key4 = jax.random.split(key, 4)
-        self.norm1 = eqx.nn.BatchNorm(input_size=3, axis_name="batch")
+        self.norm1 = eqx.nn.BatchNorm(input_size=3, axis_name="batch", mode="batch")
         self.spectral_linear = eqx.nn.SpectralNorm(
             layer=eqx.nn.Linear(in_features=3, out_features=32, key=key1),
             weight_name="weight",
             key=key2,
         )
-        self.norm2 = eqx.nn.BatchNorm(input_size=32, axis_name="batch")
+        self.norm2 = eqx.nn.BatchNorm(input_size=32, axis_name="batch", mode="batch")
         self.linear1 = eqx.nn.Linear(in_features=32, out_features=32, key=key3)
         self.linear2 = eqx.nn.Linear(in_features=32, out_features=3, key=key4)
 
@@ -103,16 +103,19 @@ def make_model(*, seed=0, flavour, **kwargs):
         # from https://docs.kidger.site/equinox/examples/stateful/
         model = Model_stateful(key=key)
     elif flavour.startswith('lineax-'):
-        from lineax import CG, GMRES, LU, QR, SVD, BiCGStab, Diagonal, NormalCG, Triangular, Tridiagonal
+        from lineax import CG, GMRES, LU, QR, SVD, BiCGStab, Diagonal, Normal, Triangular, Tridiagonal
 
-        module_ = flavour.split('-')[1]
-        module_ = locals()[module_]
-        if module_ in [BiCGStab, CG, GMRES, NormalCG]:
-            model = module_(atol=1e-3, rtol=1e-4)
-        elif module_ in [Diagonal, LU, QR, SVD, Triangular, Tridiagonal]:
-            model = module_()
+        module_name = flavour.split('-')[1]
+        if module_name == 'NormalCG':
+            model = Normal(CG(atol=1e-3, rtol=1e-4))
         else:
-            raise ValueError(f'unknown module {module_}')
+            module_ = locals()[module_name]
+            if module_ in [BiCGStab, CG, GMRES]:
+                model = module_(atol=1e-3, rtol=1e-4)
+            elif module_ in [Diagonal, LU, QR, SVD, Triangular, Tridiagonal]:
+                model = module_()
+            else:
+                raise ValueError(f'unknown module {module_}')
     elif flavour == 'diffrax':
         from diffrax import Dopri5, ODETerm, diffeqsolve
 

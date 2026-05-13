@@ -70,7 +70,8 @@ class ModelWithMeta:
             module=self.module,
             qualname=self.qualname,
         )
-        open(os.path.join(path, _SERIALIZE_META_FILENAME), 'w').write(json.dumps(serialize_meta))
+        with open(os.path.join(path, _SERIALIZE_META_FILENAME), 'w') as f:
+            f.write(json.dumps(serialize_meta))
 
     def _save_model(self, path, *, flavour, **kwargs):
         flavour = flavour or self.default_equinox_serialization_flavour
@@ -80,13 +81,16 @@ class ModelWithMeta:
         return flavour
 
     def _save_meta(self, path):
-        json.dump(self.meta, open(path, 'w'))
+        with open(path, 'w') as f:
+            json.dump(self.meta, f)
 
     @classmethod
     def load(cls, path):
         # TODO: consider using deserialize from dict as intermediary to avoid logic twice
-        meta = json.load(open(os.path.join(path, _META_FILENAME)))
-        serialize_meta = json.load(open(os.path.join(path, _SERIALIZE_META_FILENAME)))
+        with open(os.path.join(path, _META_FILENAME)) as f:
+            meta = json.load(f)
+        with open(os.path.join(path, _SERIALIZE_META_FILENAME)) as f:
+            serialize_meta = json.load(f)
         flavour = serialize_meta['serialization_flavour']
         reader = _serialization_flavours[flavour]['read']
         path = os.path.join(path, _MODEL_FILENAME)
