@@ -69,6 +69,49 @@ Where `serialize_meta.json` includes at least:
   is a concrete need for optimizer-state checkpointing, checkpoint managers,
   async saves, sharded arrays, or distributed training.
 
+## Current Orbax wrapper status
+
+`equinox_utils/serialization.py` currently has:
+
+```python
+def write_equinox_via_orbax(model, path):
+    checkpointer = ocp.PyTreeCheckpointer()
+    checkpointer.save(path, model)
+
+def read_equinox_via_orbax(path, **kwargs):
+    checkpointer = ocp.PyTreeCheckpointer()
+    return checkpointer.restore(path)
+```
+
+Treat this as not production-ready.
+
+Reasons:
+
+- Orbax is not currently an installed dependency in this project.
+- The wrapper does not take or use an Equinox skeleton/template on restore.
+- It does not save optimizer/train state, so it is not a real checkpoint helper.
+- It does not integrate with `ModelWithMeta` reconstruction the way
+  `tree_serialise_leaves` does.
+- `ModelWithMeta.load(..., flavour='orbax')` tries to reconstruct with
+  `model.model.__class__(**pytree)`, which is unlikely to be robust for normal
+  Equinox modules.
+- There is no active test coverage for the Orbax flavour.
+
+If adding Orbax properly, design it as a checkpoint backend for a train state:
+
+```text
+checkpoint item:
+  model
+  optimizer_state
+  step
+  rng
+  trainer_state
+```
+
+Keep final fitted-model artifacts on the simpler
+`ModelWithMeta-like manifest + eqx.tree_serialise_leaves` path unless there is a
+specific reason to use Orbax.
+
 ## TIY lesson
 
 TIY currently has ad hoc `.npz`, `.eqx`, lineage JSON, and prediction artifacts.
@@ -76,4 +119,3 @@ That is not the same as a loadable model artifact. A small improved
 `equinox_utils` artifact API could be reused there, but should stay general:
 model metadata and Equinox leaves in; project-specific run metadata stays
 outside.
-
