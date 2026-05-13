@@ -154,7 +154,7 @@ def maybe_json_loads(x):
 
 def cloudpickle_write(x):
     import cloudpickle
-    return b64decode(cloudpickle.dumps(x)).decode()
+    return b64encode(cloudpickle.dumps(x)).decode()
 
 
 def cloudpickile_read(x):
@@ -207,7 +207,7 @@ def params_to_jsonifiable(params, array_flavour='tolist', allow_pickle_fallback=
             key = {'tolist': 'np_tolist', 'save': 'np_save', 'save_xz_b64': 'np_save_xz_b64'}[array_flavour]
             fun = serializers_deserializers[key]['write']
             return f'{key}:{fun(x)}'
-        elif isinstance(x, FunctionType):
+        elif isinstance(x, (FunctionType, type)):
             # NOTE: bad but just for functions not sure what else to do here
             fun = serializers_deserializers['cloudpickle']['write']
             return f'cloudpickle:{fun(x)}'
@@ -224,7 +224,7 @@ def params_to_jsonifiable(params, array_flavour='tolist', allow_pickle_fallback=
                     )
             return x  # f'json:{x}'
 
-    return jax.tree_map(inner, params)
+    return jax.tree_util.tree_map(inner, params)
 
 
 def jsonifiable_to_params(jsonifiable):
@@ -238,15 +238,19 @@ def jsonifiable_to_params(jsonifiable):
         fun = serializers_deserializers[key]['read']
         return fun(val)
 
-    return jax.tree_map(inner, jsonifiable)
+    return jax.tree_util.tree_map(inner, jsonifiable)
 
 
-def save_model_state(model, buf, array_flavour='tolist'):
+def save_model_state(model, buf, array_flavour='tolist', allow_pickle_fallback=False):
     """Save a model to a "json" file with arrays encoded according to array_flavour.
 
     - array_flavour: one of 'tolist', 'save', 'save_xz_b64'"""
     params = recurse_get_state(model)
-    jsonifiable = params_to_jsonifiable(params)
+    jsonifiable = params_to_jsonifiable(
+        params,
+        array_flavour=array_flavour,
+        allow_pickle_fallback=allow_pickle_fallback,
+    )
     json.dump(jsonifiable, buf)
 
 

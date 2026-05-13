@@ -27,7 +27,7 @@ def tuple_to_list(tree):
 #         else:
 #             return jnp.all(x == y)
 #
-#     comparison_tree = jax.tree_map(compare_elements, tree1, tree2)
+#     comparison_tree = jax.tree_util.tree_map(compare_elements, tree1, tree2)
 #
 #     all_identical = all(jax.tree_util.tree_flatten(comparison_tree)[0])
 #     return all_identical
@@ -68,7 +68,7 @@ def check_identical_with_debug(tree1, tree2):
 
         return identical
 
-    comparison_tree = jax.tree_map(compare_elements, tree1, tree2)
+    comparison_tree = jax.tree_util.tree_map(compare_elements, tree1, tree2)
     all_identical = all(jax.tree_util.tree_flatten(comparison_tree)[0])
     print(f"all_identical: {all_identical}")
 
